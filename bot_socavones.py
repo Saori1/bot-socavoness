@@ -1,207 +1,134 @@
 import logging
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import sqlite3
 import os
+import sqlite3
 
 # Configuración
 TOKEN = os.getenv('TOKEN')
-ADMIN_USER = os.getenv('ADMIN_USER', '123456789')
 
-class BotSocavonesSimple:
-    def __init__(self):
-        self.setup_database()
-        
-    def setup_database(self):
-        """Configura la base de datos simple"""
-        self.conn = sqlite3.connect('socavones.db', check_same_thread=False)
-        cursor = self.conn.cursor()
-        
+# Configurar logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+def main():
+    """Función principal ultra simple"""
+    print("🤖 Iniciando Bot de Socavones...")
+    
+    try:
+        # Configurar base de datos simple
+        conn = sqlite3.connect('socavones.db', check_same_thread=False)
+        cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS reportes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                ubicacion TEXT,
-                problema TEXT,
+                mensaje TEXT,
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        self.conn.commit()
-
-    def start(self, update: Update, context: CallbackContext):
-        """Comando /start"""
-        user = update.effective_user
-        welcome_text = f"""
-🤖 BOT DE SOCAVONES - IZTAPALAPA
-
-¡Hola {user.first_name}! Reporta socavones y fugas.
-
-📍 Col. José López Portillo, Iztapalapa
-
-📋 COMANDOS:
-/start - Menú principal
-/reportar - Reportar un problema
-/info - Información importante
-/emergencia - Teléfonos de emergencia
-        """
+        conn.commit()
+        print("✅ Base de datos configurada")
         
-        keyboard = [
-            ['/reportar', '/info'],
-            ['/emergencia']
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        
-        update.message.reply_text(welcome_text, reply_markup=reply_markup)
-
-    def info(self, update: Update, context: CallbackContext):
-        """Información sobre socavones"""
-        info_text = """
-🔍 INFORMACIÓN SOBRE SOCAVONES
-
-🚰 PRINCIPALES CAUSAS:
-• Fugras de agua subterráneas
-• Suelo arcilloso inestable  
-• Erosión del subsuelo
-• Falta de mantenimiento
-
-⚠️ SEÑALES DE PELIGRO:
-• Hundimientos en el pavimento
-• Grietas en paredes y suelo
-• Charcos persistentes sin lluvia
-• Sonidos huecos al caminar
-
-📍 Zona de monitoreo: Col. José López Portillo
-        """
-        update.message.reply_text(info_text)
-
-    def emergencia(self, update: Update, context: CallbackContext):
-        """Teléfonos de emergencia"""
-        emergencia_text = """
-🚨 TELÉFONOS DE EMERGENCIA
-
-📞 Protección Civil: 911
-📞 Sistema de Aguas: 5654-3210  
-📞 Locatel: 5658-1111
-📞 Bomberos: 911
-
-⚠️ EN CASO DE SOCAVÓN:
-1. Aléjese inmediatamente
-2. Alertar a vecinos
-3. Llamar a Protección Civil
-4. No tomar selfies cerca
-        """
-        update.message.reply_text(emergencia_text)
-
-    def reportar(self, update: Update, context: CallbackContext):
-        """Inicia el reporte"""
-        instrucciones = """
-📝 REPORTAR PROBLEMA
-
-Por favor envía tu reporte en este formato:
-
-*Ubicación exacta:*
-*Problema observado:*
-
-📌 EJEMPLO:
-Calle Principal #123, entre Calle A y B
-Fuga de agua visible y hundimiento en pavimento
-
-⚠️ Incluye detalles específicos de la ubicación
-        """
-        update.message.reply_text(instrucciones)
-        # Guardar que el usuario está en modo reporte
-        context.user_data['esperando_reporte'] = True
-
-    def procesar_mensaje(self, update: Update, context: CallbackContext):
-        """Procesa todos los mensajes"""
-        try:
-            user_id = update.effective_user.id
-            mensaje = update.message.text
-            
-            # Si está esperando un reporte
-            if context.user_data.get('esperando_reporte'):
-                self.guardar_reporte(user_id, mensaje)
-                
-                respuesta = """
-✅ REPORTE GUARDADO EXITOSAMENTE
-
-Hemos registrado tu observación. 
-Si es una emergencia, contacta:
-🚨 911 - Protección Civil
-
-Gracias por tu colaboración comunitaria.
-                """
-                update.message.reply_text(respuesta)
-                context.user_data['esperando_reporte'] = False
-                
-                # Notificar al administrador
-                self.notificar_admin(context, user_id, mensaje)
-                
-            else:
-                # Mensaje normal
-                update.message.reply_text(
-                    "Usa /start para ver los comandos disponibles o /reportar para hacer un reporte."
-                )
-                
-        except Exception as e:
-            logging.error(f"Error: {e}")
-            update.message.reply_text("❌ Error al procesar tu mensaje. Intenta nuevamente.")
-
-    def guardar_reporte(self, user_id, mensaje):
-        """Guarda el reporte en la base de datos"""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            'INSERT INTO reportes (user_id, problema) VALUES (?, ?)',
-            (user_id, mensaje)
-        )
-        self.conn.commit()
-
-    def notificar_admin(self, context, user_id, mensaje):
-        """Notifica al administrador"""
-        try:
-            admin_text = f"""
-🚨 NUEVO REPORTE RECIBIDO
-
-👤 Usuario: {user_id}
-📝 Reporte: {mensaje}
-
-Revisar urgencia del caso.
-            """
-            context.bot.send_message(
-                chat_id=ADMIN_USER,
-                text=admin_text
-            )
-        except Exception as e:
-            logging.error(f"Error notificando admin: {e}")
-
-    def run(self):
-        """Inicia el bot"""
-        logging.basicConfig(
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            level=logging.INFO
-        )
+        # Importar telegram después de configurar todo
+        from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
         
         # Crear updater
         updater = Updater(TOKEN, use_context=True)
         dispatcher = updater.dispatcher
         
-        # Comandos
-        dispatcher.add_handler(CommandHandler("start", self.start))
-        dispatcher.add_handler(CommandHandler("info", self.info))
-        dispatcher.add_handler(CommandHandler("emergencia", self.emergencia))
-        dispatcher.add_handler(CommandHandler("reportar", self.reportar))
+        def start(update, context):
+            """Comando /start"""
+            user = update.effective_user
+            update.message.reply_text(
+                f"🤖 BOT SOCAVONES IZTAPALAPA\n\n"
+                f"Hola {user.first_name}! Reporta socavones y fugas.\n\n"
+                f"📍 Col. José López Portillo\n\n"
+                f"📋 COMANDOS:\n"
+                f"/start - Menú\n"
+                f"/reportar [mensaje] - Reportar problema\n"
+                f"/info - Información\n"
+                f"/emergencia - Teléfonos"
+            )
         
-        # Mensajes normales
-        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.procesar_mensaje))
+        def info(update, context):
+            """Comando /info"""
+            update.message.reply_text(
+                "🔍 INFORMACIÓN SOCAVONES\n\n"
+                "🚰 Causas principales:\n"
+                "• Fugas de agua\n"
+                "• Suelo arcilloso\n"
+                "• Erosión\n\n"
+                "📍 Zona: Col. José López Portillo"
+            )
+        
+        def emergencia(update, context):
+            """Comando /emergencia"""
+            update.message.reply_text(
+                "🚨 EMERGENCIA\n\n"
+                "📞 Protección Civil: 911\n"
+                "📞 Sistema de Aguas: 5654-3210\n"
+                "📞 Locatel: 5658-1111\n\n"
+                "⚠️ En caso de socavón:\n"
+                "1. Aléjese\n"
+                "2. Alertar vecinos\n"
+                "3. Llamar al 911"
+            )
+        
+        def reportar(update, context):
+            """Comando /reportar"""
+            if context.args:
+                mensaje = ' '.join(context.args)
+                user_id = update.effective_user.id
+                
+                # Guardar en base de datos
+                cursor.execute(
+                    'INSERT INTO reportes (user_id, mensaje) VALUES (?, ?)',
+                    (user_id, mensaje)
+                )
+                conn.commit()
+                
+                update.message.reply_text(
+                    "✅ REPORTE GUARDADO\n\n"
+                    f"Tu reporte: {mensaje}\n\n"
+                    "Gracias por tu colaboración."
+                )
+                
+                print(f"📝 Nuevo reporte: {mensaje}")
+            else:
+                update.message.reply_text(
+                    "📝 USO: /reportar [tu mensaje]\n\n"
+                    "Ejemplo:\n"
+                    "/reportar Fuga en calle Principal #123"
+                )
+        
+        def mensaje_normal(update, context):
+            """Manejar mensajes normales"""
+            update.message.reply_text(
+                "Escribe /start para ver los comandos disponibles\n"
+                "O usa /reportar [mensaje] para hacer un reporte"
+            )
+        
+        # Agregar handlers
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(CommandHandler("info", info))
+        dispatcher.add_handler(CommandHandler("emergencia", emergencia))
+        dispatcher.add_handler(CommandHandler("reportar", reportar))
+        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, mensaje_normal))
         
         # Iniciar bot
-        print("🤖 Bot Simple de Socavones iniciado!")
+        print("🚀 Bot iniciado correctamente!")
         print("📍 Iztapalapa - Col. José López Portillo")
-        print("🚀 Funcionando en Render.com")
         
         updater.start_polling()
         updater.idle()
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        # Intentar reiniciar después de 10 segundos
+        import time
+        time.sleep(10)
+        main()
 
 if __name__ == "__main__":
-    bot = BotSocavonesSimple()
-    bot.run()
+    main()
