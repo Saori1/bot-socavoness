@@ -8,5 +8,3 @@ services:
     envVars:
       - key: TOKEN
         sync: false
-      - key: ADMIN_USER
-        sync: false
