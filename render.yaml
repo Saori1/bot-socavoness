@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: bot-socavones
+    name: bot-socavoness
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -11,4 +11,5 @@ services:
       - key: ADMIN_USERS  
         sync: false
       - key: IMGBB_API_KEY
+
         sync: false
