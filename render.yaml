@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot_socavoness.py
+    startCommand: python bot_socavones.py
     envVars:
       - key: TOKEN
         sync: false
@@ -13,4 +13,5 @@ services:
       - key: IMGBB_API_KEY
 
         sync: false
+
 
