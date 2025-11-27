@@ -1,6 +1,6 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
 import sqlite3
 import math
 from datetime import datetime
@@ -51,7 +51,7 @@ class BotSocavones:
         ''')
         self.conn.commit()
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def start(self, update: Update, context: CallbackContext):
         """Comando /start - Mensaje de bienvenida"""
         user = update.effective_user
         welcome_text = f"""
@@ -78,13 +78,13 @@ class BotSocavones:
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
-        await update.message.reply_text(
+        update.message.reply_text(
             welcome_text, 
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
 
-    async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def info_command(self, update: Update, context: CallbackContext):
         """Comando /info - Información importante"""
         info_text = """
 🔍 *INFORMACIÓN IMPORTANTE - BASADA EN ANÁLISIS CIENTÍFICO*
@@ -110,9 +110,9 @@ class BotSocavones:
 
 *📍 Col. José López Portillo, Iztapalapa*
         """
-        await update.message.reply_text(info_text, parse_mode='Markdown')
+        update.message.reply_text(info_text, parse_mode='Markdown')
 
-    async def comentario_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def comentario_command(self, update: Update, context: CallbackContext):
         """Inicia el proceso para reportar comentarios"""
         instruction_text = """
 📝 *SISTEMA DE REPORTES CON FOTO*
@@ -133,19 +133,19 @@ Selecciona una opción:
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         
-        await update.message.reply_text(
+        update.message.reply_text(
             instruction_text, 
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
         return COMENTARIO_INPUT
 
-    async def procesar_opcion_comentario(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def procesar_opcion_comentario(self, update: Update, context: CallbackContext):
         """Procesa la opción seleccionada para el comentario"""
         opcion = update.message.text
         
         if opcion == "📝 Solo texto":
-            await update.message.reply_text(
+            update.message.reply_text(
                 "✍️ *Modo solo texto*\n\nPor favor escribe tu comentario:",
                 parse_mode='Markdown',
                 reply_markup=ReplyKeyboardRemove()
@@ -153,7 +153,7 @@ Selecciona una opción:
             return COMENTARIO_INPUT
             
         elif opcion == "📸 Texto y foto":
-            await update.message.reply_text(
+            update.message.reply_text(
                 "📸 *Modo texto con foto*\n\nPrimero escribe tu comentario, luego podrás adjuntar una foto:",
                 parse_mode='Markdown',
                 reply_markup=ReplyKeyboardRemove()
@@ -162,66 +162,66 @@ Selecciona una opción:
             return COMENTARIO_INPUT
             
         else:
-            await update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
+            update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
 
-    async def procesar_comentario(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def procesar_comentario(self, update: Update, context: CallbackContext):
         """Procesa los comentarios reportados por usuarios"""
         try:
             comentario = update.message.text.strip()
             user_id = update.effective_user.id
             
             if len(comentario) < 10:
-                await update.message.reply_text("❌ El comentario es muy corto. Por favor proporciona más detalles.")
+                update.message.reply_text("❌ El comentario es muy corto. Por favor proporciona más detalles.")
                 return COMENTARIO_INPUT
             
             context.user_data['comentario_temp'] = comentario
             
             if context.user_data.get('con_foto'):
-                await update.message.reply_text(
+                update.message.reply_text(
                     "📸 *Ahora puedes enviar la foto*\n\nToma una foto o selecciona una de tu galería.\nEscribe /saltar si no quieres adjuntar foto.",
                     parse_mode='Markdown'
                 )
                 return FOTO_INPUT
             else:
-                return await self.finalizar_comentario(update, context, comentario, None)
+                return self.finalizar_comentario(update, context, comentario, None)
             
         except Exception as e:
             logging.error(f"Error procesando comentario: {e}")
-            await update.message.reply_text("❌ Error al procesar el comentario. Intenta nuevamente.")
+            update.message.reply_text("❌ Error al procesar el comentario. Intenta nuevamente.")
             return ConversationHandler.END
 
-    async def procesar_foto(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def procesar_foto(self, update: Update, context: CallbackContext):
         """Procesa la foto enviada por el usuario"""
         try:
             if update.message.text and update.message.text.lower() == '/saltar':
                 comentario = context.user_data.get('comentario_temp')
                 if comentario:
-                    return await self.finalizar_comentario(update, context, comentario, None)
+                    return self.finalizar_comentario(update, context, comentario, None)
                 else:
-                    await update.message.reply_text("❌ Primero debes escribir un comentario.")
+                    update.message.reply_text("❌ Primero debes escribir un comentario.")
                     return COMENTARIO_INPUT
             
-            photo_file = await update.message.photo[-1].get_file()
-            foto_url = await self.subir_foto_a_cloud(photo_file)
+            photo_file = update.message.photo[-1].get_file()
+            foto_url = self.subir_foto_a_cloud(photo_file)
             
             comentario = context.user_data.get('comentario_temp')
             if comentario:
-                return await self.finalizar_comentario(update, context, comentario, foto_url)
+                return self.finalizar_comentario(update, context, comentario, foto_url)
             else:
-                await update.message.reply_text("❌ Error: No se encontró el comentario.")
+                update.message.reply_text("❌ Error: No se encontró el comentario.")
                 return ConversationHandler.END
                 
         except Exception as e:
             logging.error(f"Error procesando foto: {e}")
-            await update.message.reply_text("❌ Error al procesar la foto. Intenta nuevamente o escribe /saltar.")
+            update.message.reply_text("❌ Error al procesar la foto. Intenta nuevamente o escribe /saltar.")
             return FOTO_INPUT
 
-    async def subir_foto_a_cloud(self, photo_file):
+    def subir_foto_a_cloud(self, photo_file):
         """Sube la foto a ImgBB"""
         try:
             photo_bytes = BytesIO()
-            await photo_file.download_to_memory(photo_bytes)
+            photo_file.download(out=photo_bytes)
             photo_bytes.seek(0)
             
             response = requests.post(
@@ -241,7 +241,7 @@ Selecciona una opción:
             logging.error(f"Error en subir_foto_a_cloud: {e}")
             return None
 
-    async def finalizar_comentario(self, update: Update, context: ContextTypes.DEFAULT_TYPE, comentario: str, foto_url: str = None):
+    def finalizar_comentario(self, update: Update, context: CallbackContext, comentario: str, foto_url: str = None):
         """Finaliza el proceso de comentario"""
         try:
             user_id = update.effective_user.id
@@ -256,22 +256,22 @@ Selecciona una opción:
                 del context.user_data['con_foto']
             
             if foto_url:
-                await update.message.reply_photo(
+                update.message.reply_photo(
                     photo=foto_url,
                     caption=respuesta,
                     parse_mode='Markdown'
                 )
             else:
-                await update.message.reply_text(respuesta, parse_mode='Markdown')
+                update.message.reply_text(respuesta, parse_mode='Markdown')
             
             if tipo_reporte in ["FUGA_AGUA", "SOCAVON", "HUNDIMIENTO"]:
-                await self.notificar_administradores(context, user_id, comentario, tipo_reporte, foto_url)
+                self.notificar_administradores(context, user_id, comentario, tipo_reporte, foto_url)
             
             return ConversationHandler.END
             
         except Exception as e:
             logging.error(f"Error finalizando comentario: {e}")
-            await update.message.reply_text("❌ Error al guardar el comentario.")
+            update.message.reply_text("❌ Error al guardar el comentario.")
             return ConversationHandler.END
 
     def clasificar_comentario(self, comentario):
@@ -311,21 +311,21 @@ Selecciona una opción:
         
         return respuesta
 
-    async def notificar_administradores(self, context, user_id, comentario, tipo_reporte, foto_url=None):
+    def notificar_administradores(self, context, user_id, comentario, tipo_reporte, foto_url=None):
         """Notifica a los administradores"""
         try:
             for admin_id in ADMIN_USERS:
                 mensaje = f"🚨 *REPORTE URGENTE - {tipo_reporte}*\n\nUsuario: {user_id}\nComentario: {comentario}\nFoto: {'Sí' if foto_url else 'No'}"
                 
                 if foto_url:
-                    await context.bot.send_photo(chat_id=admin_id, photo=foto_url, caption=mensaje, parse_mode='Markdown')
+                    context.bot.send_photo(chat_id=admin_id, photo=foto_url, caption=mensaje, parse_mode='Markdown')
                 else:
-                    await context.bot.send_message(chat_id=admin_id, text=mensaje, parse_mode='Markdown')
+                    context.bot.send_message(chat_id=admin_id, text=mensaje, parse_mode='Markdown')
                     
         except Exception as e:
             logging.error(f"Error notificando administradores: {e}")
 
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def help_command(self, update: Update, context: CallbackContext):
         """Comando /help"""
         help_text = """
 📋 *GUÍA RÁPIDA DEL BOT*
@@ -340,9 +340,9 @@ Selecciona una opción:
 
 *📍 Col. José López Portillo, Iztapalapa*
         """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        update.message.reply_text(help_text, parse_mode='Markdown')
 
-    async def calcular_riesgo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def calcular_riesgo(self, update: Update, context: CallbackContext):
         """Inicia el cálculo de riesgo"""
         instruction_text = """
 🔍 *CALCULADOR DE RIESGO*
@@ -359,15 +359,15 @@ Envía 4 valores (uno por línea):
 50
 13
         """
-        await update.message.reply_text(instruction_text, parse_mode='Markdown')
+        update.message.reply_text(instruction_text, parse_mode='Markdown')
         return RIESGO_INPUT
 
-    async def procesar_datos_riesgo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def procesar_datos_riesgo(self, update: Update, context: CallbackContext):
         """Procesa los datos de riesgo"""
         try:
             datos = update.message.text.strip().split('\n')
             if len(datos) != 4:
-                await update.message.reply_text("❌ Error: Debes enviar exactamente 4 valores")
+                update.message.reply_text("❌ Error: Debes enviar exactamente 4 valores")
                 return RIESGO_INPUT
             
             fugas_agua = float(datos[0])
@@ -377,13 +377,13 @@ Envía 4 valores (uno por línea):
             
             # Validaciones
             if not all(0 <= x <= 1000 for x in [fugas_agua, humedad_suelo, nivel_freatico, mantenimiento]):
-                await update.message.reply_text("❌ Error: Valores fuera de rango")
+                update.message.reply_text("❌ Error: Valores fuera de rango")
                 return RIESGO_INPUT
             
             riesgo = self.calcular_riesgo_estadistico(fugas_agua, humedad_suelo, nivel_freatico, mantenimiento)
             
             self.guardar_reporte(update.effective_user.id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo)
-            await self.enviar_resultado(update, riesgo, {
+            self.enviar_resultado(update, riesgo, {
                 'fugas_agua': fugas_agua,
                 'humedad_suelo': humedad_suelo,
                 'nivel_freatico': nivel_freatico,
@@ -393,7 +393,7 @@ Envía 4 valores (uno por línea):
             return ConversationHandler.END
             
         except ValueError:
-            await update.message.reply_text("❌ Error: Todos los valores deben ser números")
+            update.message.reply_text("❌ Error: Todos los valores deben ser números")
             return RIESGO_INPUT
 
     def calcular_riesgo_estadistico(self, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento):
@@ -425,7 +425,7 @@ Envía 4 valores (uno por línea):
         ''', (user_id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo))
         self.conn.commit()
 
-    async def enviar_resultado(self, update: Update, riesgo: float, datos: dict):
+    def enviar_resultado(self, update: Update, riesgo: float, datos: dict):
         """Envía el resultado"""
         if riesgo > 0.7:
             nivel = "🚨 ALERTA ROJA"
@@ -453,9 +453,9 @@ Envía 4 valores (uno por línea):
 
 *📍 Col. José López Portillo, Iztapalapa*
         """
-        await update.message.reply_text(resultado_text, parse_mode='Markdown')
+        update.message.reply_text(resultado_text, parse_mode='Markdown')
 
-    async def ver_reporte(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def ver_reporte(self, update: Update, context: CallbackContext):
         """Muestra el último reporte"""
         user_id = update.effective_user.id
         cursor = self.conn.cursor()
@@ -469,29 +469,30 @@ Envía 4 valores (uno por línea):
         else:
             reporte_text = "📭 No tienes reportes. Usa /calcular"
         
-        await update.message.reply_text(reporte_text, parse_mode='Markdown')
+        update.message.reply_text(reporte_text, parse_mode='Markdown')
 
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cancel(self, update: Update, context: CallbackContext):
         """Cancela la conversación"""
-        await update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
+        update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     def run(self):
-        """Inicia el bot - VERSIÓN CORREGIDA"""
+        """Inicia el bot - VERSIÓN COMPATIBLE"""
         # Configurar logging
         logging.basicConfig(
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             level=logging.INFO
         )
         
-        # Crear aplicación con la nueva API
-        application = Application.builder().token(TOKEN).build()
+        # Crear updater con la API compatible
+        updater = Updater(TOKEN, use_context=True)
+        dispatcher = updater.dispatcher
         
         # Configurar handlers de conversación
         conv_riesgo = ConversationHandler(
             entry_points=[CommandHandler('calcular', self.calcular_riesgo)],
             states={
-                RIESGO_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_datos_riesgo)]
+                RIESGO_INPUT: [MessageHandler(Filters.text & ~Filters.command, self.procesar_datos_riesgo)]
             },
             fallbacks=[CommandHandler('cancel', self.cancel)]
         )
@@ -499,23 +500,24 @@ Envía 4 valores (uno por línea):
         conv_comentarios = ConversationHandler(
             entry_points=[CommandHandler('comentario', self.comentario_command)],
             states={
-                COMENTARIO_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_opcion_comentario)],
-                FOTO_INPUT: [MessageHandler(filters.PHOTO | filters.TEXT, self.procesar_foto)],
+                COMENTARIO_INPUT: [MessageHandler(Filters.text & ~Filters.command, self.procesar_opcion_comentario)],
+                FOTO_INPUT: [MessageHandler(Filters.photo | Filters.text, self.procesar_foto)],
             },
             fallbacks=[CommandHandler('cancel', self.cancel)]
         )
         
         # Agregar handlers
-        application.add_handler(CommandHandler("start", self.start))
-        application.add_handler(CommandHandler("help", self.help_command))
-        application.add_handler(CommandHandler("reporte", self.ver_reporte))
-        application.add_handler(CommandHandler("info", self.info_command))
-        application.add_handler(conv_riesgo)
-        application.add_handler(conv_comentarios)
+        dispatcher.add_handler(CommandHandler("start", self.start))
+        dispatcher.add_handler(CommandHandler("help", self.help_command))
+        dispatcher.add_handler(CommandHandler("reporte", self.ver_reporte))
+        dispatcher.add_handler(CommandHandler("info", self.info_command))
+        dispatcher.add_handler(conv_riesgo)
+        dispatcher.add_handler(conv_comentarios)
         
-        # Iniciar el bot - MÉTODO CORREGIDO
+        # Iniciar el bot
         print("🤖 Bot iniciado en Render.com - Siempre activo!")
-        application.run_polling()
+        updater.start_polling()
+        updater.idle()
 
 # Ejecutar el bot
 if __name__ == "__main__":
