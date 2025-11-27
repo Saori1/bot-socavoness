@@ -8,8 +8,5 @@ services:
     envVars:
       - key: TOKEN
         sync: false
-      - key: ADMIN_USERS  
+      - key: ADMIN_USER
         sync: false
-      - key: IMGBB_API_KEY
-        sync: false
-
