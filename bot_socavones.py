@@ -2,7 +2,7 @@ import os
 import logging
 import sqlite3
 from flask import Flask
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters
 
 # Configurar logging
 logging.basicConfig(
@@ -15,12 +15,16 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv('TOKEN')
 PORT = int(os.environ.get('PORT', 5000))
 
-# Crear aplicación Flask (necesaria para Web Service)
+# Crear aplicación Flask
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "🤖 Bot de Socavones Iztapalapa - ACTIVO ✅"
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 class BotSocavones:
     def __init__(self):
@@ -132,12 +136,12 @@ class BotSocavones:
             updater = Updater(TOKEN, use_context=True)
             dispatcher = updater.dispatcher
             
-            # Agregar handlers
+            # Agregar handlers - USAR filters (no Filters)
             dispatcher.add_handler(CommandHandler("start", self.start))
             dispatcher.add_handler(CommandHandler("info", self.info))
             dispatcher.add_handler(CommandHandler("emergencia", self.emergencia))
             dispatcher.add_handler(CommandHandler("reportar", self.reportar))
-            dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.mensaje_normal))
+            dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.mensaje_normal))
             
             # Iniciar polling del bot
             updater.start_polling()
@@ -151,13 +155,18 @@ class BotSocavones:
 
 def main():
     """Función principal"""
-    # Iniciar el bot
-    bot = BotSocavones()
-    bot_updater = bot.run_bot()
-    
-    # Iniciar servidor Flask en el puerto correcto
-    print(f"🌐 Iniciando servidor web en puerto {PORT}...")
-    app.run(host='0.0.0.0', port=PORT)
+    try:
+        # Iniciar el bot
+        bot = BotSocavones()
+        bot_updater = bot.run_bot()
+        
+        # Iniciar servidor Flask en el puerto correcto
+        print(f"🌐 Iniciando servidor web en puerto {PORT}...")
+        app.run(host='0.0.0.0', port=PORT)
+        
+    except Exception as e:
+        logger.error(f"❌ Error en main: {e}")
+        print(f"❌ Error crítico: {e}")
 
 if __name__ == "__main__":
     main()
