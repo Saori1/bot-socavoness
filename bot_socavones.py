@@ -1,525 +1,207 @@
 import logging
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import sqlite3
-import math
-from datetime import datetime
-import requests
 import os
-from io import BytesIO
 
-# CONFIGURACIÓN - Usar variables de entorno
+# Configuración
 TOKEN = os.getenv('TOKEN')
-ADMIN_USERS = [int(x) for x in os.getenv('ADMIN_USERS', '123456789').split(',')]
-IMGBB_API_KEY = os.getenv('IMGBB_API_KEY')
+ADMIN_USER = os.getenv('ADMIN_USER', '123456789')
 
-# Estados para las conversaciones
-RIESGO_INPUT, COMENTARIO_INPUT, FOTO_INPUT = range(3)
-
-class BotSocavones:
+class BotSocavonesSimple:
     def __init__(self):
         self.setup_database()
         
     def setup_database(self):
-        """Configura la base de datos SQLite"""
-        self.conn = sqlite3.connect('socavones_bot.db', check_same_thread=False)
+        """Configura la base de datos simple"""
+        self.conn = sqlite3.connect('socavones.db', check_same_thread=False)
         cursor = self.conn.cursor()
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS reportes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                fugas_agua REAL,
-                humedad_suelo REAL,
-                nivel_freatico REAL,
-                mantenimiento REAL,
-                riesgo_calculado REAL,
-                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS comentarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                comentario TEXT,
-                tipo TEXT,
                 ubicacion TEXT,
-                foto_url TEXT,
+                problema TEXT,
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         self.conn.commit()
 
     def start(self, update: Update, context: CallbackContext):
-        """Comando /start - Mensaje de bienvenida"""
+        """Comando /start"""
         user = update.effective_user
         welcome_text = f"""
-🚧 SISTEMA DE ALERTA TEMPRANA - SOCAVONES IZTAPALAPA 🚧
+🤖 BOT DE SOCAVONES - IZTAPALAPA
 
-¡Hola {user.first_name}! Soy tu asistente para monitoreo de riesgo de socavones.
+¡Hola {user.first_name}! Reporta socavones y fugas.
 
-📍 *Col. José López Portillo, Iztapalapa*
-📊 *Basado en análisis estadístico 2022-2024*
-🔄 *Bot siempre activo - 24/7*
+📍 Col. José López Portillo, Iztapalapa
 
-*Comandos disponibles:*
-/calcular - Calcular riesgo de socavones
-/reporte - Ver mi último reporte
-/info - Información importante y emergencias
-/comentario - Reportar observaciones o fugas (con foto)
-/help - Ayuda e información
+📋 COMANDOS:
+/start - Menú principal
+/reportar - Reportar un problema
+/info - Información importante
+/emergencia - Teléfonos de emergencia
         """
         
         keyboard = [
-            ["/calcular", "/reporte"],
-            ["/info", "/comentario"],
-            ["/help"]
+            ['/reportar', '/info'],
+            ['/emergencia']
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
-        update.message.reply_text(
-            welcome_text, 
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-    def info_command(self, update: Update, context: CallbackContext):
-        """Comando /info - Información importante"""
+    def info(self, update: Update, context: CallbackContext):
+        """Información sobre socavones"""
         info_text = """
-🔍 *INFORMACIÓN IMPORTANTE - BASADA EN ANÁLISIS CIENTÍFICO*
+🔍 INFORMACIÓN SOBRE SOCAVONES
 
-📊 *FACTORES CLAVE IDENTIFICADOS:*
+🚰 PRINCIPALES CAUSAS:
+• Fugras de agua subterráneas
+• Suelo arcilloso inestable  
+• Erosión del subsuelo
+• Falta de mantenimiento
 
-1️⃣ *FUGAS DE AGUA* 🚰
-• Correlación: +0.96 (MUY ALTA)
-• Las fugas erosionan el subsuelo
+⚠️ SEÑALES DE PELIGRO:
+• Hundimientos en el pavimento
+• Grietas en paredes y suelo
+• Charcos persistentes sin lluvia
+• Sonidos huecos al caminar
 
-2️⃣ *HUMEDAD DEL SUELO* 💧
-• Correlación: +0.95 (MUY ALTA)
-• Suelos arcillosos más inestables
-
-3️⃣ *NIVEL FREÁTICO* 📉
-• Correlación: -0.96 (MUY ALTA)
-• Nivel profundo = suelo quebradizo
-
-🚨 *TELÉFONOS DE EMERGENCIA:*
-• Protección Civil: 911
-• Sistema de Aguas: 5654-3210
-• Locatel: 5658-1111
-
-*📍 Col. José López Portillo, Iztapalapa*
+📍 Zona de monitoreo: Col. José López Portillo
         """
-        update.message.reply_text(info_text, parse_mode='Markdown')
+        update.message.reply_text(info_text)
 
-    def comentario_command(self, update: Update, context: CallbackContext):
-        """Inicia el proceso para reportar comentarios"""
-        instruction_text = """
-📝 *SISTEMA DE REPORTES CON FOTO*
+    def emergencia(self, update: Update, context: CallbackContext):
+        """Teléfonos de emergencia"""
+        emergencia_text = """
+🚨 TELÉFONOS DE EMERGENCIA
 
-Puedes reportar:
-• Fugas de agua visibles
-• Hundimientos o grietas
-• Socavones detectados
+📞 Protección Civil: 911
+📞 Sistema de Aguas: 5654-3210  
+📞 Locatel: 5658-1111
+📞 Bomberos: 911
 
-*¿Quieres incluir una foto?*
-Las fotos ayudan a la verificación.
-
-Selecciona una opción:
+⚠️ EN CASO DE SOCAVÓN:
+1. Aléjese inmediatamente
+2. Alertar a vecinos
+3. Llamar a Protección Civil
+4. No tomar selfies cerca
         """
-        keyboard = [
-            ["📝 Solo texto", "📸 Texto y foto"],
-            ["❌ Cancelar"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        
-        update.message.reply_text(
-            instruction_text, 
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        return COMENTARIO_INPUT
+        update.message.reply_text(emergencia_text)
 
-    def procesar_opcion_comentario(self, update: Update, context: CallbackContext):
-        """Procesa la opción seleccionada para el comentario"""
-        opcion = update.message.text
-        
-        if opcion == "📝 Solo texto":
-            update.message.reply_text(
-                "✍️ *Modo solo texto*\n\nPor favor escribe tu comentario:",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardRemove()
-            )
-            return COMENTARIO_INPUT
-            
-        elif opcion == "📸 Texto y foto":
-            update.message.reply_text(
-                "📸 *Modo texto con foto*\n\nPrimero escribe tu comentario, luego podrás adjuntar una foto:",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardRemove()
-            )
-            context.user_data['con_foto'] = True
-            return COMENTARIO_INPUT
-            
-        else:
-            update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
-            return ConversationHandler.END
+    def reportar(self, update: Update, context: CallbackContext):
+        """Inicia el reporte"""
+        instrucciones = """
+📝 REPORTAR PROBLEMA
 
-    def procesar_comentario(self, update: Update, context: CallbackContext):
-        """Procesa los comentarios reportados por usuarios"""
+Por favor envía tu reporte en este formato:
+
+*Ubicación exacta:*
+*Problema observado:*
+
+📌 EJEMPLO:
+Calle Principal #123, entre Calle A y B
+Fuga de agua visible y hundimiento en pavimento
+
+⚠️ Incluye detalles específicos de la ubicación
+        """
+        update.message.reply_text(instrucciones)
+        # Guardar que el usuario está en modo reporte
+        context.user_data['esperando_reporte'] = True
+
+    def procesar_mensaje(self, update: Update, context: CallbackContext):
+        """Procesa todos los mensajes"""
         try:
-            comentario = update.message.text.strip()
             user_id = update.effective_user.id
+            mensaje = update.message.text
             
-            if len(comentario) < 10:
-                update.message.reply_text("❌ El comentario es muy corto. Por favor proporciona más detalles.")
-                return COMENTARIO_INPUT
-            
-            context.user_data['comentario_temp'] = comentario
-            
-            if context.user_data.get('con_foto'):
+            # Si está esperando un reporte
+            if context.user_data.get('esperando_reporte'):
+                self.guardar_reporte(user_id, mensaje)
+                
+                respuesta = """
+✅ REPORTE GUARDADO EXITOSAMENTE
+
+Hemos registrado tu observación. 
+Si es una emergencia, contacta:
+🚨 911 - Protección Civil
+
+Gracias por tu colaboración comunitaria.
+                """
+                update.message.reply_text(respuesta)
+                context.user_data['esperando_reporte'] = False
+                
+                # Notificar al administrador
+                self.notificar_admin(context, user_id, mensaje)
+                
+            else:
+                # Mensaje normal
                 update.message.reply_text(
-                    "📸 *Ahora puedes enviar la foto*\n\nToma una foto o selecciona una de tu galería.\nEscribe /saltar si no quieres adjuntar foto.",
-                    parse_mode='Markdown'
+                    "Usa /start para ver los comandos disponibles o /reportar para hacer un reporte."
                 )
-                return FOTO_INPUT
-            else:
-                return self.finalizar_comentario(update, context, comentario, None)
-            
-        except Exception as e:
-            logging.error(f"Error procesando comentario: {e}")
-            update.message.reply_text("❌ Error al procesar el comentario. Intenta nuevamente.")
-            return ConversationHandler.END
-
-    def procesar_foto(self, update: Update, context: CallbackContext):
-        """Procesa la foto enviada por el usuario"""
-        try:
-            if update.message.text and update.message.text.lower() == '/saltar':
-                comentario = context.user_data.get('comentario_temp')
-                if comentario:
-                    return self.finalizar_comentario(update, context, comentario, None)
-                else:
-                    update.message.reply_text("❌ Primero debes escribir un comentario.")
-                    return COMENTARIO_INPUT
-            
-            photo_file = update.message.photo[-1].get_file()
-            foto_url = self.subir_foto_a_cloud(photo_file)
-            
-            comentario = context.user_data.get('comentario_temp')
-            if comentario:
-                return self.finalizar_comentario(update, context, comentario, foto_url)
-            else:
-                update.message.reply_text("❌ Error: No se encontró el comentario.")
-                return ConversationHandler.END
                 
         except Exception as e:
-            logging.error(f"Error procesando foto: {e}")
-            update.message.reply_text("❌ Error al procesar la foto. Intenta nuevamente o escribe /saltar.")
-            return FOTO_INPUT
+            logging.error(f"Error: {e}")
+            update.message.reply_text("❌ Error al procesar tu mensaje. Intenta nuevamente.")
 
-    def subir_foto_a_cloud(self, photo_file):
-        """Sube la foto a ImgBB"""
+    def guardar_reporte(self, user_id, mensaje):
+        """Guarda el reporte en la base de datos"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            'INSERT INTO reportes (user_id, problema) VALUES (?, ?)',
+            (user_id, mensaje)
+        )
+        self.conn.commit()
+
+    def notificar_admin(self, context, user_id, mensaje):
+        """Notifica al administrador"""
         try:
-            photo_bytes = BytesIO()
-            photo_file.download(out=photo_bytes)
-            photo_bytes.seek(0)
-            
-            response = requests.post(
-                'https://api.imgbb.com/1/upload',
-                files={'image': photo_bytes},
-                data={'key': IMGBB_API_KEY}
+            admin_text = f"""
+🚨 NUEVO REPORTE RECIBIDO
+
+👤 Usuario: {user_id}
+📝 Reporte: {mensaje}
+
+Revisar urgencia del caso.
+            """
+            context.bot.send_message(
+                chat_id=ADMIN_USER,
+                text=admin_text
             )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return data['data']['url']
-            else:
-                logging.error(f"Error subiendo foto: {response.status_code}")
-                return None
-                
         except Exception as e:
-            logging.error(f"Error en subir_foto_a_cloud: {e}")
-            return None
-
-    def finalizar_comentario(self, update: Update, context: CallbackContext, comentario: str, foto_url: str = None):
-        """Finaliza el proceso de comentario"""
-        try:
-            user_id = update.effective_user.id
-            tipo_reporte = self.clasificar_comentario(comentario)
-            
-            self.guardar_comentario(user_id, comentario, tipo_reporte, foto_url)
-            respuesta = self.generar_respuesta_reporte(tipo_reporte, comentario, foto_url)
-            
-            if 'comentario_temp' in context.user_data:
-                del context.user_data['comentario_temp']
-            if 'con_foto' in context.user_data:
-                del context.user_data['con_foto']
-            
-            if foto_url:
-                update.message.reply_photo(
-                    photo=foto_url,
-                    caption=respuesta,
-                    parse_mode='Markdown'
-                )
-            else:
-                update.message.reply_text(respuesta, parse_mode='Markdown')
-            
-            if tipo_reporte in ["FUGA_AGUA", "SOCAVON", "HUNDIMIENTO"]:
-                self.notificar_administradores(context, user_id, comentario, tipo_reporte, foto_url)
-            
-            return ConversationHandler.END
-            
-        except Exception as e:
-            logging.error(f"Error finalizando comentario: {e}")
-            update.message.reply_text("❌ Error al guardar el comentario.")
-            return ConversationHandler.END
-
-    def clasificar_comentario(self, comentario):
-        """Clasifica el tipo de reporte"""
-        comentario_lower = comentario.lower()
-        
-        if any(palabra in comentario_lower for palabra in ['fuga', 'agua', 'tubería', 'escape']):
-            return "FUGA_AGUA"
-        elif any(palabra in comentario_lower for palabra in ['socavón', 'socavon', 'hoyo', 'hundimiento']):
-            return "SOCAVON"
-        elif any(palabra in comentario_lower for palabra in ['grieta', 'fisura', 'agrietamiento']):
-            return "GRIETA"
-        else:
-            return "OBSERVACION"
-
-    def guardar_comentario(self, user_id, comentario, tipo_reporte, foto_url=None):
-        """Guarda el comentario en la base de datos"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO comentarios (user_id, comentario, tipo, foto_url)
-            VALUES (?, ?, ?, ?)
-        ''', (user_id, comentario, tipo_reporte, foto_url))
-        self.conn.commit()
-
-    def generar_respuesta_reporte(self, tipo_reporte, comentario, foto_url=None):
-        """Genera respuesta personalizada"""
-        base_respuestas = {
-            "FUGA_AGUA": "✅ *REPORTE DE FUGA REGISTRADO*\n\nAcciones: Mantener distancia, reportar al 5654-3210",
-            "SOCAVON": "🚨 *REPORTE DE SOCAVÓN REGISTRADO*\n\nAcciones: Alejarse, llamar al 911",
-            "GRIETA": "⚠️ *REPORTE DE GRIETA REGISTRADO*\n\nRecomendaciones: Monitorear crecimiento",
-            "OBSERVACION": "📝 *COMENTARIO REGISTRADO*\n\nGracias por tu contribución"
-        }
-        
-        respuesta = base_respuestas.get(tipo_reporte, base_respuestas["OBSERVACION"])
-        respuesta += f"\n\n*Tu comentario:* \"{comentario}\""
-        respuesta += f"\n*📸 Foto adjunta:* {'Sí' if foto_url else 'No'}"
-        
-        return respuesta
-
-    def notificar_administradores(self, context, user_id, comentario, tipo_reporte, foto_url=None):
-        """Notifica a los administradores"""
-        try:
-            for admin_id in ADMIN_USERS:
-                mensaje = f"🚨 *REPORTE URGENTE - {tipo_reporte}*\n\nUsuario: {user_id}\nComentario: {comentario}\nFoto: {'Sí' if foto_url else 'No'}"
-                
-                if foto_url:
-                    context.bot.send_photo(chat_id=admin_id, photo=foto_url, caption=mensaje, parse_mode='Markdown')
-                else:
-                    context.bot.send_message(chat_id=admin_id, text=mensaje, parse_mode='Markdown')
-                    
-        except Exception as e:
-            logging.error(f"Error notificando administradores: {e}")
-
-    def help_command(self, update: Update, context: CallbackContext):
-        """Comando /help"""
-        help_text = """
-📋 *GUÍA RÁPIDA DEL BOT*
-
-*COMANDOS:*
-/start - Menú principal
-/calcular - Analizar riesgo
-/reporte - Ver último análisis
-/info - Información importante
-/comentario - Reportar con fotos
-/help - Esta ayuda
-
-*📍 Col. José López Portillo, Iztapalapa*
-        """
-        update.message.reply_text(help_text, parse_mode='Markdown')
-
-    def calcular_riesgo(self, update: Update, context: CallbackContext):
-        """Inicia el cálculo de riesgo"""
-        instruction_text = """
-🔍 *CALCULADOR DE RIESGO*
-
-Envía 4 valores (uno por línea):
-1. Fugas de agua (0-1000)
-2. Humedad suelo (0-100%)
-3. Nivel freático (0-100m)
-4. Mantenimiento (0-100)
-
-*Ejemplo:*
-180
-45
-50
-13
-        """
-        update.message.reply_text(instruction_text, parse_mode='Markdown')
-        return RIESGO_INPUT
-
-    def procesar_datos_riesgo(self, update: Update, context: CallbackContext):
-        """Procesa los datos de riesgo"""
-        try:
-            datos = update.message.text.strip().split('\n')
-            if len(datos) != 4:
-                update.message.reply_text("❌ Error: Debes enviar exactamente 4 valores")
-                return RIESGO_INPUT
-            
-            fugas_agua = float(datos[0])
-            humedad_suelo = float(datos[1])
-            nivel_freatico = float(datos[2])
-            mantenimiento = float(datos[3])
-            
-            # Validaciones
-            if not all(0 <= x <= 1000 for x in [fugas_agua, humedad_suelo, nivel_freatico, mantenimiento]):
-                update.message.reply_text("❌ Error: Valores fuera de rango")
-                return RIESGO_INPUT
-            
-            riesgo = self.calcular_riesgo_estadistico(fugas_agua, humedad_suelo, nivel_freatico, mantenimiento)
-            
-            self.guardar_reporte(update.effective_user.id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo)
-            self.enviar_resultado(update, riesgo, {
-                'fugas_agua': fugas_agua,
-                'humedad_suelo': humedad_suelo,
-                'nivel_freatico': nivel_freatico,
-                'mantenimiento': mantenimiento
-            })
-            
-            return ConversationHandler.END
-            
-        except ValueError:
-            update.message.reply_text("❌ Error: Todos los valores deben ser números")
-            return RIESGO_INPUT
-
-    def calcular_riesgo_estadistico(self, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento):
-        """Calcula el riesgo estadístico"""
-        medias = {'fugas_agua': 178.67, 'humedad_suelo': 45.0, 'nivel_freatico': 50.03, 'mantenimiento_hidraulico': 12.67}
-        desviaciones = {'fugas_agua': 59.53, 'humedad_suelo': 5.57, 'nivel_freatico': 2.62, 'mantenimiento_hidraulico': 6.66}
-        
-        factor_fugas = self.calcular_factor_normalizado(fugas_agua, medias['fugas_agua'], desviaciones['fugas_agua']) * 0.35
-        factor_humedad = self.calcular_factor_normalizado(humedad_suelo, medias['humedad_suelo'], desviaciones['humedad_suelo']) * 0.30
-        factor_nivel_freatico = (1 - self.calcular_factor_normalizado(nivel_freatico, medias['nivel_freatico'], desviaciones['nivel_freatico'])) * 0.25
-        factor_mantenimiento = (1 - self.calcular_factor_normalizado(mantenimiento, medias['mantenimiento_hidraulico'], desviaciones['mantenimiento_hidraulico'])) * 0.10
-        
-        riesgo_total = factor_fugas + factor_humedad + factor_nivel_freatico + factor_mantenimiento
-        return min(max(riesgo_total, 0.0), 1.0)
-
-    def calcular_factor_normalizado(self, valor, media, desviacion):
-        """Normaliza el valor"""
-        if desviacion == 0:
-            return 0.5
-        z_score = (valor - media) / desviacion
-        return 1 / (1 + math.exp(-z_score * 0.5))
-
-    def guardar_reporte(self, user_id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo):
-        """Guarda el reporte"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO reportes (user_id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo_calculado)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, fugas_agua, humedad_suelo, nivel_freatico, mantenimiento, riesgo))
-        self.conn.commit()
-
-    def enviar_resultado(self, update: Update, riesgo: float, datos: dict):
-        """Envía el resultado"""
-        if riesgo > 0.7:
-            nivel = "🚨 ALERTA ROJA"
-            telefono = "📞 *CONTACTO: 911*"
-        elif riesgo > 0.4:
-            nivel = "🟡 ALERTA AMARILLA"
-            telefono = "📞 *Reporte: 5658-1111*"
-        else:
-            nivel = "🟢 SITUACIÓN ESTABLE"
-            telefono = "📞 *Mantenimiento: 5654-3210*"
-        
-        resultado_text = f"""
-{nivel.split()[1]} *RESULTADO DEL ANÁLISIS* {nivel.split()[1]}
-
-*Riesgo:* {riesgo:.3f}/1.000
-*Alerta:* {nivel}
-
-*Datos:*
-• Fugas: {datos['fugas_agua']} reportes/año
-• Humedad: {datos['humedad_suelo']}%
-• Nivel freático: {datos['nivel_freatico']} m
-• Mantenimiento: {datos['mantenimiento']} acciones
-
-{telefono}
-
-*📍 Col. José López Portillo, Iztapalapa*
-        """
-        update.message.reply_text(resultado_text, parse_mode='Markdown')
-
-    def ver_reporte(self, update: Update, context: CallbackContext):
-        """Muestra el último reporte"""
-        user_id = update.effective_user.id
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT * FROM reportes WHERE user_id = ? ORDER BY fecha DESC LIMIT 1', (user_id,))
-        reporte = cursor.fetchone()
-        
-        if reporte:
-            riesgo = reporte[6]
-            nivel = "🚨 ALERTA ROJA" if riesgo > 0.7 else "🟡 ALERTA AMARILLA" if riesgo > 0.4 else "🟢 ESTABLE"
-            reporte_text = f"📋 *ÚLTIMO REPORTE*\n\nRiesgo: {riesgo:.3f}\nNivel: {nivel}\n\nUsa /calcular para nuevo análisis"
-        else:
-            reporte_text = "📭 No tienes reportes. Usa /calcular"
-        
-        update.message.reply_text(reporte_text, parse_mode='Markdown')
-
-    def cancel(self, update: Update, context: CallbackContext):
-        """Cancela la conversación"""
-        update.message.reply_text("Operación cancelada.", reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
+            logging.error(f"Error notificando admin: {e}")
 
     def run(self):
-        """Inicia el bot - VERSIÓN COMPATIBLE"""
-        # Configurar logging
+        """Inicia el bot"""
         logging.basicConfig(
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             level=logging.INFO
         )
         
-        # Crear updater con la API compatible
+        # Crear updater
         updater = Updater(TOKEN, use_context=True)
         dispatcher = updater.dispatcher
         
-        # Configurar handlers de conversación
-        conv_riesgo = ConversationHandler(
-            entry_points=[CommandHandler('calcular', self.calcular_riesgo)],
-            states={
-                RIESGO_INPUT: [MessageHandler(Filters.text & ~Filters.command, self.procesar_datos_riesgo)]
-            },
-            fallbacks=[CommandHandler('cancel', self.cancel)]
-        )
-        
-        conv_comentarios = ConversationHandler(
-            entry_points=[CommandHandler('comentario', self.comentario_command)],
-            states={
-                COMENTARIO_INPUT: [MessageHandler(Filters.text & ~Filters.command, self.procesar_opcion_comentario)],
-                FOTO_INPUT: [MessageHandler(Filters.photo | Filters.text, self.procesar_foto)],
-            },
-            fallbacks=[CommandHandler('cancel', self.cancel)]
-        )
-        
-        # Agregar handlers
+        # Comandos
         dispatcher.add_handler(CommandHandler("start", self.start))
-        dispatcher.add_handler(CommandHandler("help", self.help_command))
-        dispatcher.add_handler(CommandHandler("reporte", self.ver_reporte))
-        dispatcher.add_handler(CommandHandler("info", self.info_command))
-        dispatcher.add_handler(conv_riesgo)
-        dispatcher.add_handler(conv_comentarios)
+        dispatcher.add_handler(CommandHandler("info", self.info))
+        dispatcher.add_handler(CommandHandler("emergencia", self.emergencia))
+        dispatcher.add_handler(CommandHandler("reportar", self.reportar))
         
-        # Iniciar el bot
-        print("🤖 Bot iniciado en Render.com - Siempre activo!")
+        # Mensajes normales
+        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.procesar_mensaje))
+        
+        # Iniciar bot
+        print("🤖 Bot Simple de Socavones iniciado!")
+        print("📍 Iztapalapa - Col. José López Portillo")
+        print("🚀 Funcionando en Render.com")
+        
         updater.start_polling()
         updater.idle()
 
-# Ejecutar el bot
 if __name__ == "__main__":
-    bot = BotSocavones()
+    bot = BotSocavonesSimple()
     bot.run()
