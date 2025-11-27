@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: bot-socavoness
     env: python
     plan: free
@@ -8,4 +8,3 @@ services:
     envVars:
       - key: TOKEN
         sync: false
-
